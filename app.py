@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, flash, redirect, url_for, jsonify
+from flask import Flask, render_template, request, flash, redirect, url_for, jsonify, session
 from flask_pymongo import PyMongo
 from flask_mail import Mail, Message
 from werkzeug.utils import secure_filename
@@ -8,7 +8,9 @@ import threading
 import time
 import cloudinary
 import cloudinary.uploader
-from datetime import datetime
+from datetime import datetime, timedelta
+from bson.objectid import ObjectId
+import urllib.parse
 
 app = Flask(__name__)
 app.secret_key = "campuscoin_tracker_2026"
@@ -23,8 +25,9 @@ cloudinary.config(
 )
 
 # 2. MongoDB & Mail Setup
-# TODO for Participants: Insert your free MongoDB Atlas URI here
-app.config["MONGO_URI"] = "mongodb+srv://priteepardeshi3011_db_user:o1UpyYozHv4zvlTn@cluster0.a5drjzn.mongodb.net/"
+# User's MongoDB Atlas connection with proper URL encoding
+encoded_password = urllib.parse.quote_plus("Zahara@#$1")
+app.config["MONGO_URI"] = f"mongodb+srv://Zahara:{encoded_password}@cluster0.dyxzgxe.mongodb.net/yourtreasurer"
 mongo = PyMongo(app)
 
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -52,27 +55,57 @@ def send_async_email(app, msg):
 @app.before_request
 def check_budget_setup():
     """
-    TODO Task 1: Check if the user has set up their initial monthly budget.
-    If they haven't (and they aren't on static/profile pages), redirect them to MyProfile.
+    Zero-Persistence: Check if user is authenticated and has set up budget.
+    Redirect to profile if not authenticated or budget not set.
     """
-    pass 
+    # Pages that don't require authentication
+    allowed_routes = ['my_profile', 'authenticate', 'register', 'static', 'logout']
+    
+    if request.endpoint and request.endpoint in allowed_routes:
+        return
+    
+    # Check if user is authenticated via session
+    if 'user_name' not in session:
+        return redirect(url_for('my_profile'))
+    
+    # Zero-Persistence: Verify user exists in MongoDB
+    user = mongo.db.users.find_one({"name": session['user_name']})
+    if not user:
+        session.clear()
+        return redirect(url_for('my_profile'))
+    
+    # Check if user has monthly_limit set
+    if not user.get('monthly_limit'):
+        flash("Please set your monthly budget limit to continue.", "info")
+        return redirect(url_for('my_profile')) 
 
 # --- CORE NAVIGATION ROUTES ---
 
 @app.route('/')
 def home():
     # TODO: Fetch today's expenses to show a quick summary on the home dashboard
-    return render_template('index.html')
+    return render_template('index.html', datetime=datetime)
 
 @app.route('/my_profile')
 def my_profile():
-    # TODO: Fetch user's current budget threshold from MongoDB
-    return render_template('profile.html')
+    # Check if user is already logged in
+    if 'user_name' in session:
+        # Zero-Persistence: Verify user exists in MongoDB
+        user = mongo.db.users.find_one({"name": session['user_name']})
+        if user:
+            # User is logged in, show profile with user data
+            return render_template('profile.html', user=user, datetime=datetime)
+        else:
+            # User not found in DB, clear session
+            session.clear()
+    
+    # User not logged in, show login/registration form
+    return render_template('profile.html', datetime=datetime)
 
 @app.route('/my_expenses')
 def my_expenses():
     # TODO: Fetch all expenses from MongoDB, sort by date, and pass to template
-    return render_template('expenses.html')
+    return render_template('expenses.html', datetime=datetime)
 
 @app.route('/analysis')
 def analysis():
@@ -86,6 +119,96 @@ def interval_spend():
 @app.route('/about_us')
 def about_us():
     return render_template('about_us.html')
+
+# --- AUTHENTICATION ROUTES ---
+
+@app.route('/authenticate', methods=['POST'])
+def authenticate():
+    """Handle user login with Zero-Persistence rule."""
+    try:
+        name = request.form.get('name')
+        password = request.form.get('password')
+        
+        # Zero-Persistence: Verify against MongoDB for every request
+        user = mongo.db.users.find_one({"name": name})
+        
+        if user and user['password'] == password:
+            # Check for 30-day reset
+            start_date = user.get('start_date', datetime.now())
+            current_date = datetime.now()
+            
+            # If 30 days have passed, reset the budget cycle
+            if current_date > start_date + timedelta(days=30):
+                # Archive current expenses and reset
+                mongo.db.users.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "current_spend": 0,
+                            "start_date": current_date,
+                            "last_reset": current_date
+                        }
+                    }
+                )
+                flash("Your 30-day budget cycle has been reset! Please set a new monthly limit.", "info")
+                return redirect(url_for('my_profile'))
+            
+            # Set session (minimal info only)
+            session['user_name'] = name
+            flash("Welcome back! Your treasury is unlocked.", "success")
+            return redirect(url_for('home'))
+        else:
+            flash("Invalid credentials. Please try again.", "error")
+            return redirect(url_for('my_profile'))
+            
+    except Exception as e:
+        print(f"Authentication Error: {e}")
+        flash("Login failed. Please try again.", "error")
+        return redirect(url_for('my_profile'))
+
+@app.route('/register', methods=['POST'])
+def register():
+    """Handle new user registration."""
+    try:
+        name = request.form.get('name')
+        password = request.form.get('password')
+        monthly_limit = float(request.form.get('monthly_limit'))
+        
+        # Check if user already exists
+        existing_user = mongo.db.users.find_one({"name": name})
+        if existing_user:
+            flash("User already exists. Please login.", "error")
+            return redirect(url_for('my_profile'))
+        
+        # Create new user with initial budget setup
+        new_user = {
+            "name": name,
+            "password": password,  # In production, use proper hashing
+            "monthly_limit": monthly_limit,
+            "current_spend": 0,
+            "start_date": datetime.now(),
+            "created_at": datetime.now(),
+            "email_sent_10": False,  # Flags for email alerts
+            "email_sent_5": False,
+            "email_sent_0": False
+        }
+        
+        mongo.db.users.insert_one(new_user)
+        session['user_name'] = name
+        flash("Account created successfully! Your budget journey begins now.", "success")
+        return redirect(url_for('home'))
+        
+    except Exception as e:
+        print(f"Registration Error: {e}")
+        flash("Registration failed. Please try again.", "error")
+        return redirect(url_for('my_profile'))
+
+@app.route('/logout')
+def logout():
+    """Handle user logout."""
+    session.clear()
+    flash("You have been logged out successfully.", "info")
+    return redirect(url_for('my_profile'))
 
 # --- DATA SUBMISSION ROUTES (THE LOGIC) ---
 

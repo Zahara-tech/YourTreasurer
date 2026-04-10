@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourTreasurer | My Expenses</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Logo removed as requested -->
+
+    <button class="menu-trigger" id="menu-btn">
+        <span>☰ Menu</span>
+    </button>
+
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+
+     <nav id="side-nav" class="side-nav">
+        <button class="close-btn" id="close-btn">&times;</button>
+        <div class="nav-links">
+            <a href="/" data-bg="{{ url_for('static', filename='images/bg.svg') }}">Home</a>
+            <a href="/my_profile" data-bg="{{ url_for('static', filename='images/profile.jpg') }}">My Profile</a>
+            <a href="/my_expenses" data-bg="{{ url_for('static', filename='images/expenses.avif') }}">My Expenses</a>
+            <a href="/analysis" data-bg="{{ url_for('static', filename='images/Analysis.jpg') }}">Analysis</a>
+            <a href="/interval_spend" data-bg="{{ url_for('static', filename='images/interval.jpg') }}">Interval Spend</a>
+            <a href="/about_us" data-bg="{{ url_for('static', filename='images/aboutus.png') }}">About Us</a>
+        </div>
+    </nav>
+
+    <div id="dynamic-bg" class="dynamic-bg" style="background-image: url('{{ url_for('static', filename='images/expenses.avif') }}');"></div>
+    <div id="hover-bg" class="dynamic-bg hover-layer"></div>
+
+    <div class="main-layout-wrapper">
+        <div class="content-container">
+            <h1 class="title">My Expenses</h1>
+            <p class="subtitle">Track every penny wisely</p>
+            
+            <!-- Add Expense Form -->
+            <div class="expense-form">
+                <h2>Add New Expense</h2>
+                <form action="/add_expense" method="POST" enctype="multipart/form-data">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <select id="category" name="category" required>
+                                <option value="">Select Category</option>
+                                <option value="Educational">Educational</option>
+                                <option value="Lifestyle">Lifestyle</option>
+                                <option value="Healthy Food">Healthy Food</option>
+                                <option value="Junk Food">Junk Food</option>
+                                <option value="Hostel Rent">Hostel Rent</option>
+                                <option value="Travelling">Travelling</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="amount">
+                                <span class="label-icon">💰</span>
+                                Amount (₹)
+                            </label>
+                            <div class="input-wrapper">
+                                <span class="currency-symbol">₹</span>
+                                <input type="number" id="amount" name="amount" min="0" step="0.01" required placeholder="Enter amount">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="description">
+                                <span class="label-icon">📝</span>
+                                Description
+                            </label>
+                            <input type="text" id="description" name="description" placeholder="What did you spend on?" minlength="3" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="receipt">Receipt Image (Optional)</label>
+                            <input type="file" id="receipt" name="receipt_image" accept="image/*">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="is_loan" name="is_loan" onchange="toggleLoanFields()">
+                            Is this a loan to a friend?
+                        </label>
+                    </div>
+                    
+                    <div id="loan-fields" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="friend_name">Friend's Name</label>
+                                <input type="text" id="friend_name" name="friend_name">
+                            </div>
+                            <div class="form-group">
+                                <label for="friend_email">Friend's Email</label>
+                                <input type="email" id="friend_email" name="friend_email">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="relationship">Relationship</label>
+                            <select id="relationship" name="relationship">
+                                <option value="Classmate">Classmate</option>
+                                <option value="Roommate">Roommate</option>
+                                <option value="Friend">Friend</option>
+                                <option value="Family">Family</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Track Now</button>
+                </form>
+            </div>
+            
+            <!-- Expenses List -->
+            <div class="expenses-list">
+                <h2>Recent Expenses</h2>
+                <div id="expenses-container">
+                    <!-- Expenses will be loaded here dynamically -->
+                    <p class="no-expenses">No expenses recorded yet. Start tracking your spending!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="common-footer">
+        YourTreasurer &copy; 2026 | Helping Hand
+    </footer>
+
+    <script>
+        const menuBtn = document.getElementById('menu-btn');
+        const closeBtn = document.getElementById('close-btn');
+        const sideNav = document.getElementById('side-nav');
+        const backdrop = document.getElementById('menu-backdrop');
+        
+        const mainBg = document.getElementById('dynamic-bg');
+        const hoverBg = document.getElementById('hover-bg');
+        const navLinks = document.querySelectorAll('.nav-links a');
+        
+        // Set default background
+        const defaultBg = "{{ url_for('static', filename='images/expenses.avif') }}";
+        mainBg.style.backgroundImage = `url(${defaultBg})`;
+
+        function toggleMenu() {
+            sideNav.classList.toggle('open');
+            backdrop.classList.toggle('active');
+            if (sideNav.classList.contains('open')) {
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+            } else {
+                document.body.style.position = '';
+                hoverBg.style.opacity = '0';
+            }
+        }
+
+        // --- Hover Animation Logic ---
+        navLinks.forEach(link => {
+            link.addEventListener('mouseenter', () => {
+                const newImg = link.getAttribute('data-bg');
+                hoverBg.style.backgroundImage = `url(${newImg})`;
+                hoverBg.style.opacity = '1';
+            });
+
+            link.addEventListener('mouseleave', () => {
+                hoverBg.style.opacity = '0';
+            });
+        });
+
+        // --- Loan Fields Toggle ---
+        function toggleLoanFields() {
+            const loanFields = document.getElementById('loan-fields');
+            const isLoan = document.getElementById('is_loan').checked;
+            loanFields.style.display = isLoan ? 'block' : 'none';
+        }
+
+        menuBtn.addEventListener('click', toggleMenu);
+        closeBtn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+    </script>
+</body>
+</html>

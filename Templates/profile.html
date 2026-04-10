@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourTreasurer | My Profile</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Logo removed as requested -->
+
+    <button class="menu-trigger" id="menu-btn">
+        <span>☰ Menu</span>
+    </button>
+
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+
+     <nav id="side-nav" class="side-nav">
+        <button class="close-btn" id="close-btn">&times;</button>
+        <div class="nav-links">
+            <a href="/" data-bg="{{ url_for('static', filename='images/bg.svg') }}">Home</a>
+            <a href="/my_profile" data-bg="{{ url_for('static', filename='images/profile.jpg') }}">My Profile</a>
+            <a href="/my_expenses" data-bg="{{ url_for('static', filename='images/expenses.avif') }}">My Expenses</a>
+            <a href="/analysis" data-bg="{{ url_for('static', filename='images/Analysis.jpg') }}">Analysis</a>
+            <a href="/interval_spend" data-bg="{{ url_for('static', filename='images/interval.jpg') }}">Interval Spend</a>
+            <a href="/about_us" data-bg="{{ url_for('static', filename='images/aboutus.png') }}">About Us</a>
+        </div>
+    </nav>
+
+    <div id="dynamic-bg" class="dynamic-bg" style="background-image: url('{{ url_for('static', filename='images/profile.jpg') }}');"></div>
+    <div id="hover-bg" class="dynamic-bg hover-layer"></div>
+
+    <div class="main-layout-wrapper">
+        <div class="content-container">
+            {% if user %}
+                <!-- User is logged in - show profile data -->
+                <h1 class="title">Welcome, {{ user.name }}!</h1>
+                <p class="subtitle">Your Financial Profile</p>
+                
+                <div class="profile-info">
+                    <div class="info-card budget-card">
+                        <div class="card-icon">💰</div>
+                        <h3>Monthly Budget</h3>
+                        <p class="budget-amount">₹{{ "%.2f"|format(user.monthly_limit) }}</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ (user.current_spend / user.monthly_limit * 100) if user.monthly_limit > 0 else 0 }}%"></div>
+                        </div>
+                    </div>
+                    <div class="info-card spending-card">
+                        <div class="card-icon">💸</div>
+                        <h3>Current Spending</h3>
+                        <p class="spend-amount">₹{{ "%.2f"|format(user.current_spend) }}</p>
+                        <span class="percentage">{{ "%.1f"|format((user.current_spend / user.monthly_limit * 100) if user.monthly_limit > 0 else 0) }}% used</span>
+                    </div>
+                    <div class="info-card remaining-card">
+                        <div class="card-icon">💎</div>
+                        <h3>Remaining Budget</h3>
+                        <p class="remaining-amount">₹{{ "%.2f"|format(user.monthly_limit - user.current_spend) }}</p>
+                        <span class="days-left">{{ [30 - (datetime.now() - user.start_date).days, 0] | max }} days left</span>
+                    </div>
+                    <div class="info-card cycle-card">
+                        <div class="card-icon">📅</div>
+                        <h3>Budget Cycle</h3>
+                        <p class="date-info">{{ user.start_date.strftime('%B %d, %Y') }}</p>
+                        <span class="cycle-status">Active</span>
+                    </div>
+                </div>
+                
+                <div class="profile-actions">
+                    <a href="/" class="btn-primary">
+                        <span class="btn-icon">🏠</span>
+                        Go to Dashboard
+                    </a>
+                    <a href="/my_expenses" class="btn-secondary">
+                        <span class="btn-icon">📊</span>
+                        Manage Expenses
+                    </a>
+                    <a href="/analysis" class="btn-info">
+                        <span class="btn-icon">📈</span>
+                        View Analysis
+                    </a>
+                    <a href="/logout" class="btn-danger">
+                        <span class="btn-icon">🚪</span>
+                        Logout
+                    </a>
+                </div>
+                
+            {% else %}
+                <!-- User is not logged in - show login/registration forms -->
+                <h1 class="title">My Profile</h1>
+                <p class="subtitle">Manage Your Financial Profile</p>
+                
+                <!-- Login Form -->
+                <div class="auth-form" id="login-form">
+                    <h2>Existing User Login</h2>
+                    <form action="/authenticate" method="POST">
+                        <div class="form-group">
+                            <label for="login-name">
+                                <span class="label-icon">👤</span>
+                                Name
+                            </label>
+                            <input type="text" id="login-name" name="name" required placeholder="Enter your name" minlength="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">
+                                <span class="label-icon">🔐</span>
+                                Password
+                            </label>
+                            <input type="password" id="login-password" name="password" required placeholder="Enter your password">
+                        </div>
+                        <button type="submit" class="btn-primary">Unlock My Treasury</button>
+                    </form>
+                    <p class="auth-switch">
+                        New user? <a href="#" onclick="toggleForm()">Create Account</a>
+                    </p>
+                </div>
+
+                <!-- Registration Form -->
+                <div class="auth-form" id="register-form" style="display: none;">
+                    <h2>Create New Account</h2>
+                    <form action="/register" method="POST">
+                        <div class="form-group">
+                            <label for="register-name">
+                                <span class="label-icon">👤</span>
+                                Full Name
+                            </label>
+                            <input type="text" id="register-name" name="name" required placeholder="Enter your full name" minlength="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="register-password">
+                                <span class="label-icon">🔐</span>
+                                Password
+                            </label>
+                            <input type="password" id="register-password" name="password" required placeholder="Create a strong password" minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label for="monthly-limit">
+                                <span class="label-icon">💰</span>
+                                Monthly Budget Limit (₹)
+                            </label>
+                            <div class="input-wrapper">
+                                <span class="currency-symbol">₹</span>
+                                <input type="number" id="monthly-limit" name="monthly_limit" min="100" required placeholder="Enter your monthly budget">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary">Start My Journey</button>
+                    </form>
+                    <p class="auth-switch">
+                        Already have an account? <a href="#" onclick="toggleForm()">Login</a>
+                    </p>
+                </div>
+            {% endif %}
+
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for message in messages %}
+                            <div class="flash-message">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+    
+    <footer class="common-footer">
+        YourTreasurer &copy; 2026 | Helping Hand
+    </footer>
+
+    <script>
+        const menuBtn = document.getElementById('menu-btn');
+        const closeBtn = document.getElementById('close-btn');
+        const sideNav = document.getElementById('side-nav');
+        const backdrop = document.getElementById('menu-backdrop');
+        
+        const mainBg = document.getElementById('dynamic-bg');
+        const hoverBg = document.getElementById('hover-bg');
+        const navLinks = document.querySelectorAll('.nav-links a');
+        
+        // Set default background
+        const defaultBg = "{{ url_for('static', filename='images/profile.jpg') }}";
+        mainBg.style.backgroundImage = `url(${defaultBg})`;
+
+        function toggleMenu() {
+            sideNav.classList.toggle('open');
+            backdrop.classList.toggle('active');
+            if (sideNav.classList.contains('open')) {
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+            } else {
+                document.body.style.position = '';
+                // Reset bg when menu closes
+                hoverBg.style.opacity = '0';
+            }
+        }
+
+        // --- Hover Animation Logic ---
+        navLinks.forEach(link => {
+            link.addEventListener('mouseenter', () => {
+                const newImg = link.getAttribute('data-bg');
+                hoverBg.style.backgroundImage = `url(${newImg})`;
+                hoverBg.style.opacity = '1';
+            });
+
+            link.addEventListener('mouseleave', () => {
+                hoverBg.style.opacity = '0';
+            });
+        });
+
+        // --- Form Toggle Logic ---
+        function toggleForm() {
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            
+            if (loginForm.style.display === 'none') {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+            }
+        }
+
+        menuBtn.addEventListener('click', toggleMenu);
+        closeBtn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+    </script>
+</body>
+</html>

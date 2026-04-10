@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YourTreasurer | Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Logo removed as requested -->
+
+    <button class="menu-trigger" id="menu-btn">
+        <span>☰ Menu</span>
+    </button>
+
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+
+     <nav id="side-nav" class="side-nav">
+        <button class="close-btn" id="close-btn">&times;</button>
+        <div class="nav-links">
+            <a href="/" data-bg="{{ url_for('static', filename='images/bg.svg') }}">Home</a>
+            <a href="/my_profile" data-bg="{{ url_for('static', filename='images/profile.jpg') }}">My Profile</a>
+            <a href="/my_expenses" data-bg="{{ url_for('static', filename='images/expenses.avif') }}">My Expenses</a>
+            <a href="/analysis" data-bg="{{ url_for('static', filename='images/Analysis.jpg') }}">Analysis</a>
+            <a href="/interval_spend" data-bg="{{ url_for('static', filename='images/interval.jpg') }}">Interval Spend</a>
+            <a href="/about_us" data-bg="{{ url_for('static', filename='images/aboutus.png') }}">About Us</a>
+        </div>
+    </nav>
+
+    <div id="dynamic-bg" class="dynamic-bg" style="background-image: url('{{ url_for('static', filename='images/Analysis.jpg') }}');"></div>
+    <div id="hover-bg" class="dynamic-bg hover-layer"></div>
+
+    <div class="main-layout-wrapper">
+        <div class="content-container">
+            <h1 class="title">Spending Analysis</h1>
+            <p class="subtitle">Visualize your financial patterns</p>
+            
+            <!-- Chart Toggle -->
+            <div class="chart-controls">
+                <button id="dayView" class="btn-secondary active">Day View</button>
+                <button id="monthView" class="btn-secondary">Month View</button>
+            </div>
+            
+            <!-- Charts Container -->
+            <div class="charts-container">
+                <div class="chart-section">
+                    <h2>Category Breakdown</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="doughnutChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-section">
+                    <h2>Spending Trends</h2>
+                    <div class="chart-wrapper">
+                        <canvas id="lineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div class="summary-stats">
+                <div class="stat-card">
+                    <h3>Total Spent</h3>
+                    <p id="total-spent">$0.00</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Most Expensive Category</h3>
+                    <p id="top-category">-</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Average Daily Spend</h3>
+                    <p id="avg-daily">$0.00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="common-footer">
+        YourTreasurer &copy; 2026 | Helping Hand
+    </footer>
+
+    <script>
+        const menuBtn = document.getElementById('menu-btn');
+        const closeBtn = document.getElementById('close-btn');
+        const sideNav = document.getElementById('side-nav');
+        const backdrop = document.getElementById('menu-backdrop');
+        
+        const mainBg = document.getElementById('dynamic-bg');
+        const hoverBg = document.getElementById('hover-bg');
+        const navLinks = document.querySelectorAll('.nav-links a');
+        
+        // Set default background
+        const defaultBg = "{{ url_for('static', filename='images/Analysis.jpg') }}";
+        mainBg.style.backgroundImage = `url(${defaultBg})`;
+
+        function toggleMenu() {
+            sideNav.classList.toggle('open');
+            backdrop.classList.toggle('active');
+            if (sideNav.classList.contains('open')) {
+                document.body.style.position = 'fixed';
+                document.body.style.width = '100%';
+            } else {
+                document.body.style.position = '';
+                hoverBg.style.opacity = '0';
+            }
+        }
+
+        // --- Hover Animation Logic ---
+        navLinks.forEach(link => {
+            link.addEventListener('mouseenter', () => {
+                const newImg = link.getAttribute('data-bg');
+                hoverBg.style.backgroundImage = `url(${newImg})`;
+                hoverBg.style.opacity = '1';
+            });
+
+            link.addEventListener('mouseleave', () => {
+                hoverBg.style.opacity = '0';
+            });
+        });
+
+        // --- Chart Logic ---
+        let doughnutChart, lineChart;
+        let currentView = 'day';
+
+        // Initialize charts
+        async function initCharts() {
+            const response = await fetch('/api/spend_data');
+            const data = await response.json();
+            
+            // Doughnut Chart
+            const doughnutCtx = document.getElementById('doughnutChart').getContext('2d');
+            doughnutChart = new Chart(doughnutCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.categories,
+                    datasets: [{
+                        data: data.amounts,
+                        backgroundColor: [
+                            '#FF6384',
+                            '#36A2EB',
+                            '#FFCE56',
+                            '#4BC0C0',
+                            '#9966FF',
+                            '#FF9F40'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    animation: {
+                        animateRotate: true,
+                        animateScale: true
+                    }
+                }
+            });
+
+            // Line Chart (initially day view)
+            const lineCtx = document.getElementById('lineChart').getContext('2d');
+            lineChart = new Chart(lineCtx, {
+                type: 'line',
+                data: {
+                    labels: ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM'],
+                    datasets: [{
+                        label: 'Hourly Spending',
+                        data: [0, 0, 15, 45, 30, 20],
+                        borderColor: '#36A2EB',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            updateSummaryStats(data);
+        }
+
+        function updateSummaryStats(data) {
+            const total = data.amounts.reduce((a, b) => a + b, 0);
+            const maxIndex = data.amounts.indexOf(Math.max(...data.amounts));
+            
+            document.getElementById('total-spent').textContent = `$${total.toFixed(2)}`;
+            document.getElementById('top-category').textContent = data.categories[maxIndex];
+            document.getElementById('avg-daily').textContent = `$${(total / 30).toFixed(2)}`;
+        }
+
+        // View toggle functionality
+        document.getElementById('dayView').addEventListener('click', function() {
+            currentView = 'day';
+            this.classList.add('active');
+            document.getElementById('monthView').classList.remove('active');
+            updateLineChart('day');
+        });
+
+        document.getElementById('monthView').addEventListener('click', function() {
+            currentView = 'month';
+            this.classList.add('active');
+            document.getElementById('dayView').classList.remove('active');
+            updateLineChart('month');
+        });
+
+        function updateLineChart(view) {
+            if (view === 'day') {
+                lineChart.data.labels = ['12AM', '4AM', '8AM', '12PM', '4PM', '8PM'];
+                lineChart.data.datasets[0].label = 'Hourly Spending';
+                lineChart.data.datasets[0].data = [0, 0, 15, 45, 30, 20];
+            } else {
+                lineChart.data.labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+                lineChart.data.datasets[0].label = 'Weekly Spending';
+                lineChart.data.datasets[0].data = [120, 190, 85, 160];
+            }
+            lineChart.update();
+        }
+
+        menuBtn.addEventListener('click', toggleMenu);
+        closeBtn.addEventListener('click', toggleMenu);
+        backdrop.addEventListener('click', toggleMenu);
+
+        // Initialize charts on page load
+        initCharts();
+    </script>
+</body>
+</html>
