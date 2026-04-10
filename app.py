@@ -46,6 +46,7 @@ app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB limit for receipts
 LOCAL_USERS_FILE = os.path.join(app.root_path, "local_users.json")
 MONGO_AVAILABLE = None
 MONGO_LAST_CHECK = None
+MONGO_LAST_ERROR = ""
 
 # --- ASYNC BACKGROUND TASKS ---
 
@@ -64,15 +65,17 @@ def users_collection():
 
 
 def is_mongo_available():
-    global MONGO_AVAILABLE, MONGO_LAST_CHECK
+    global MONGO_AVAILABLE, MONGO_LAST_CHECK, MONGO_LAST_ERROR
     now = datetime.utcnow()
     if MONGO_LAST_CHECK and (now - MONGO_LAST_CHECK).total_seconds() < 30:
         return bool(MONGO_AVAILABLE)
     try:
         mongo.cx.admin.command("ping")
         MONGO_AVAILABLE = True
-    except PyMongoError:
+        MONGO_LAST_ERROR = ""
+    except PyMongoError as error:
         MONGO_AVAILABLE = False
+        MONGO_LAST_ERROR = str(error)
     MONGO_LAST_CHECK = now
     return bool(MONGO_AVAILABLE)
 
@@ -252,6 +255,7 @@ def login():
                 "success": True,
                 "message": "Login successful.",
                 "user": build_user_payload(user_doc),
+                "storage": "local" if use_local_store else "atlas",
                 "redirect_url": url_for("home"),
             }
         )
@@ -296,6 +300,7 @@ def login():
                 "monthly_limit": monthly_limit,
                 "current_spend": 0.0,
             },
+            "storage": "local" if use_local_store else "atlas",
             "redirect_url": url_for("home"),
         }
     )
@@ -376,6 +381,20 @@ def spend_data():
         "amounts": [1200, 500, 800, 300, 5000, 450]
     }
     return jsonify(dummy_data)
+
+
+@app.route("/api/db_status")
+def db_status():
+    connected = is_mongo_available()
+    return jsonify(
+        {
+            "atlas_connected": connected,
+            "mongo_uri_configured": bool(os.environ.get("MONGO_URI")),
+            "fallback_file_present": os.path.exists(LOCAL_USERS_FILE),
+            "last_check_utc": MONGO_LAST_CHECK.isoformat() if MONGO_LAST_CHECK else None,
+            "last_error": None if connected else MONGO_LAST_ERROR,
+        }
+    )
 
 
 @app.errorhandler(413)
