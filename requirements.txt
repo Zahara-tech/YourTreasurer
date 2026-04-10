@@ -1,0 +1,7 @@
+flask
+pymongo[srv]
+flask-mail
+cloudinary
+python-dotenv
+flask-cors
+requests
